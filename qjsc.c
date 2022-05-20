@@ -21,6 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef __VSF__
+#undef _WIN32
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -32,6 +35,7 @@
 #if !defined(_WIN32)
 #include <sys/wait.h>
 #endif
+#include <getopt.h>
 
 #include "cutils.h"
 #include "quickjs-libc.h"

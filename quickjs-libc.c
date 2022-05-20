@@ -22,6 +22,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifdef __VSF__
+#undef _WIN32
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -42,7 +45,9 @@
 #include <conio.h>
 #include <utime.h>
 #else
+#ifdef CONFIG_DYNAMICLIB
 #include <dlfcn.h>
+#endif
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
@@ -453,7 +458,7 @@ typedef JSModuleDef *(JSInitModuleFunc)(JSContext *ctx,
                                         const char *module_name);
 
 
-#if defined(_WIN32)
+#if defined(_WIN32) || !defined(CONFIG_DYNAMICLIB)
 static JSModuleDef *js_module_loader_so(JSContext *ctx,
                                         const char *module_name)
 {
