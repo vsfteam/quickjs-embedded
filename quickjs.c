@@ -1783,9 +1783,12 @@ void JS_SetGCThreshold(JSRuntime *rt, size_t gc_threshold)
     rt->malloc_gc_threshold = gc_threshold;
 }
 
+// in vsf, malloc/free/realloc maybe MACROs
+#ifndef __VSF__
 #define malloc(s) malloc_is_forbidden(s)
 #define free(p) free_is_forbidden(p)
 #define realloc(p,s) realloc_is_forbidden(p,s)
+#endif
 
 void JS_SetInterruptHandler(JSRuntime *rt, JSInterruptHandler *cb, void *opaque)
 {
