@@ -2163,7 +2163,9 @@ JSContext *JS_NewContext(JSRuntime *rt)
 
     JS_AddIntrinsicBaseObjects(ctx);
     JS_AddIntrinsicDate(ctx);
+#ifndef CONFIG_NO_EVAL
     JS_AddIntrinsicEval(ctx);
+#endif
     JS_AddIntrinsicStringNormalize(ctx);
     JS_AddIntrinsicRegExp(ctx);
     JS_AddIntrinsicJSON(ctx);
@@ -16805,7 +16807,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                     JS_ThrowInternalError(ctx, "invalid throw var type %d", type);
             }
             goto exception;
-
+#ifndef CONFIG_NO_EVAL_INSTR
         CASE(OP_eval):
             {
                 JSValueConst obj;
@@ -16867,7 +16869,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
                 *sp++ = ret_val;
             }
             BREAK;
-
+#endif
         CASE(OP_regexp):
             {
                 sp[-2] = js_regexp_constructor_internal(ctx, JS_UNDEFINED,
@@ -24690,7 +24692,11 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
                         scope = get_u16(fd->byte_code.buf + fd->last_opcode_pos + 5);
                         if (name == JS_ATOM_eval && call_type == FUNC_CALL_NORMAL && !has_optional_chain) {
                             /* direct 'eval' */
+#ifndef CONFIG_NO_EVAL_INSTR
                             opcode = OP_eval;
+#else
+                            assert(false);
+#endif
                         } else {
                             /* verify if function name resolves to a simple
                                get_loc/get_arg: a function call inside a `with`
@@ -24832,11 +24838,13 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
                     emit_op(s, OP_apply);
                     emit_u16(s, call_type == FUNC_CALL_NEW);
                     break;
+#ifndef CONFIG_NO_EVAL_INSTR
                 case OP_eval:
                     emit_op(s, OP_apply_eval);
                     emit_u16(s, fd->scope_level);
                     fd->has_eval_call = TRUE;
                     break;
+#endif
                 default:
                     if (call_type == FUNC_CALL_SUPER_CTOR) {
                         emit_op(s, OP_apply);
@@ -24874,12 +24882,14 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
                     emit_op(s, OP_call_method);
                     emit_u16(s, arg_count);
                     break;
+#ifndef CONFIG_NO_EVAL_INSTR
                 case OP_eval:
                     emit_op(s, OP_eval);
                     emit_u16(s, arg_count);
                     emit_u16(s, fd->scope_level);
                     fd->has_eval_call = TRUE;
                     break;
+#endif
                 default:
                     if (call_type == FUNC_CALL_SUPER_CTOR) {
                         emit_op(s, OP_call_constructor);
@@ -30847,7 +30857,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
             line_num = get_u32(bc_buf + pos + 1);
             s->line_number_size++;
             goto no_change;
-
+#ifndef CONFIG_NO_EVAL_INSTR
         case OP_eval: /* convert scope index to adjusted variable index */
             {
                 int call_argc = get_u16(bc_buf + pos + 1);
@@ -30864,6 +30874,7 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
             dbuf_putc(&bc_out, op);
             dbuf_put_u16(&bc_out, s->scopes[scope].first + 1);
             break;
+#endif
         case OP_scope_get_var_undef:
         case OP_scope_get_var:
         case OP_scope_put_var:
@@ -33578,6 +33589,7 @@ static void skip_shebang(JSParseState *s)
     }
 }
 
+#ifndef CONFIG_NO_EVAL
 /* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
 static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
                                  const char *input, size_t input_len,
@@ -33739,6 +33751,7 @@ JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
     return JS_EvalThis(ctx, ctx->global_obj, input, input_len, filename,
                        eval_flags);
 }
+#endif
 
 int JS_ResolveModule(JSContext *ctx, JSValueConst obj)
 {
@@ -36222,13 +36235,13 @@ static JSValueConst JS_NewGlobalCConstructorOnly(JSContext *ctx, const char *nam
     JS_NewGlobalCConstructor2(ctx, func_obj, name, proto);
     return func_obj;
 }
-
+#ifndef CONFIG_NO_EVAL
 static JSValue js_global_eval(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
     return JS_EvalObject(ctx, ctx->global_obj, argv[0], JS_EVAL_TYPE_INDIRECT, -1);
 }
-
+#endif
 static JSValue js_global_isNaN(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
@@ -37511,6 +37524,7 @@ static JSValue js_function_proto(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+#ifndef CONFIG_NO_EVAL
 /* XXX: add a specific eval mode so that Function("}), ({") is rejected */
 static JSValue js_function_constructor(JSContext *ctx, JSValueConst new_target,
                                        int argc, JSValueConst *argv, int magic)
@@ -37581,6 +37595,7 @@ static JSValue js_function_constructor(JSContext *ctx, JSValueConst new_target,
     JS_FreeValue(ctx, obj);
     return JS_EXCEPTION;
 }
+#endif
 
 static __exception int js_get_length32(JSContext *ctx, uint32_t *pres,
                                        JSValueConst obj)
@@ -47527,7 +47542,7 @@ void JS_AddIntrinsicPromise(JSContext *ctx)
                                countof(js_promise_funcs));
     JS_NewGlobalCConstructor2(ctx, obj1, "Promise",
                               ctx->class_proto[JS_CLASS_PROMISE]);
-
+#ifndef CONFIG_NO_EVAL
     /* AsyncFunction */
     ctx->class_proto[JS_CLASS_ASYNC_FUNCTION] = JS_NewObjectProto(ctx, ctx->function_proto);
     obj1 = JS_NewCFunction3(ctx, (JSCFunction *)js_function_constructor,
@@ -47541,7 +47556,7 @@ void JS_AddIntrinsicPromise(JSContext *ctx)
     JS_SetConstructor2(ctx, obj1, ctx->class_proto[JS_CLASS_ASYNC_FUNCTION],
                        0, JS_PROP_CONFIGURABLE);
     JS_FreeValue(ctx, obj1);
-
+#endif
     /* AsyncIteratorPrototype */
     ctx->async_iterator_proto = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, ctx->async_iterator_proto,
@@ -47563,6 +47578,7 @@ void JS_AddIntrinsicPromise(JSContext *ctx)
                                js_async_generator_proto_funcs,
                                countof(js_async_generator_proto_funcs));
 
+#ifndef CONFIG_NO_EVAL
     /* AsyncGeneratorFunction */
     ctx->class_proto[JS_CLASS_ASYNC_GENERATOR_FUNCTION] =
         JS_NewObjectProto(ctx, ctx->function_proto);
@@ -47581,6 +47597,7 @@ void JS_AddIntrinsicPromise(JSContext *ctx)
     JS_SetConstructor2(ctx, obj1, ctx->class_proto[JS_CLASS_ASYNC_GENERATOR_FUNCTION],
                        0, JS_PROP_CONFIGURABLE);
     JS_FreeValue(ctx, obj1);
+#endif
 }
 
 /* URI handling */
@@ -48817,11 +48834,12 @@ void JS_AddIntrinsicDate(JSContext *ctx)
 }
 
 /* eval */
-
+#ifndef CONFIG_NO_EVAL
 void JS_AddIntrinsicEval(JSContext *ctx)
 {
     ctx->eval_internal = __JS_EvalInternal;
 }
+#endif
 
 #ifdef CONFIG_BIGNUM
 
@@ -50953,13 +50971,21 @@ void JS_AddIntrinsicBaseObjects(JSContext *ctx)
                                js_object_proto_funcs, countof(js_object_proto_funcs));
 
     /* Function */
+#ifdef CONFIG_NO_EVAL
+    JS_SetPropertyFunctionList(ctx, ctx->function_proto, js_function_proto_funcs, countof(js_function_proto_funcs));
+    ctx->function_ctor = JS_NewCFunctionMagic(ctx, NULL,
+                                              "Function", 1, JS_CFUNC_constructor_or_func_magic,
+                                              JS_FUNC_NORMAL);
+    JS_NewGlobalCConstructor2(ctx, JS_DupValue(ctx, ctx->function_ctor), "Function",
+                              ctx->function_proto);
+#else
     JS_SetPropertyFunctionList(ctx, ctx->function_proto, js_function_proto_funcs, countof(js_function_proto_funcs));
     ctx->function_ctor = JS_NewCFunctionMagic(ctx, js_function_constructor,
                                               "Function", 1, JS_CFUNC_constructor_or_func_magic,
                                               JS_FUNC_NORMAL);
     JS_NewGlobalCConstructor2(ctx, JS_DupValue(ctx, ctx->function_ctor), "Function",
                               ctx->function_proto);
-
+#endif
     /* Error */
     obj1 = JS_NewCFunctionMagic(ctx, js_error_constructor,
                                 "Error", 1, JS_CFUNC_constructor_or_func_magic, -1);
@@ -51092,6 +51118,7 @@ void JS_AddIntrinsicBaseObjects(JSContext *ctx)
                                js_generator_proto_funcs,
                                countof(js_generator_proto_funcs));
 
+#ifndef CONFIG_NO_EVAL
     ctx->class_proto[JS_CLASS_GENERATOR_FUNCTION] = JS_NewObjectProto(ctx, ctx->function_proto);
     obj1 = JS_NewCFunctionMagic(ctx, js_function_constructor,
                                 "GeneratorFunction", 1,
@@ -51106,13 +51133,14 @@ void JS_AddIntrinsicBaseObjects(JSContext *ctx)
     JS_SetConstructor2(ctx, obj1, ctx->class_proto[JS_CLASS_GENERATOR_FUNCTION],
                        0, JS_PROP_CONFIGURABLE);
     JS_FreeValue(ctx, obj1);
-
+#endif
     /* global properties */
+#ifndef CONFIG_NO_EVAL
     ctx->eval_obj = JS_NewCFunction(ctx, js_global_eval, "eval", 1);
     JS_DefinePropertyValue(ctx, ctx->global_obj, JS_ATOM_eval,
                            JS_DupValue(ctx, ctx->eval_obj),
                            JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
-
+#endif
     JS_DefinePropertyValue(ctx, ctx->global_obj, JS_ATOM_globalThis,
                            JS_DupValue(ctx, ctx->global_obj),
                            JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE);

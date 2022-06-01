@@ -408,6 +408,7 @@ uint8_t *js_load_file(JSContext *ctx, size_t *pbuf_len, const char *filename)
     return buf;
 }
 
+#ifndef CONFIG_NO_EVAL
 /* load and evaluate a file */
 static JSValue js_loadScript(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
@@ -432,6 +433,7 @@ static JSValue js_loadScript(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, filename);
     return ret;
 }
+#endif
 
 /* load a file as a UTF-8 encoded string */
 static JSValue js_std_loadFile(JSContext *ctx, JSValueConst this_val,
@@ -577,6 +579,9 @@ JSModuleDef *js_module_loader(JSContext *ctx,
     if (has_suffix(module_name, ".so")) {
         m = js_module_loader_so(ctx, module_name);
     } else {
+#ifdef CONFIG_NO_EVAL
+        assert(false);
+#else
         size_t buf_len;
         uint8_t *buf;
         JSValue func_val;
@@ -599,6 +604,7 @@ JSModuleDef *js_module_loader(JSContext *ctx,
         /* the module is already referenced, so we must free it */
         m = JS_VALUE_GET_PTR(func_val);
         JS_FreeValue(ctx, func_val);
+#endif
     }
     return m;
 }
@@ -746,6 +752,7 @@ static int get_bool_option(JSContext *ctx, BOOL *pbool,
     return 0;
 }
 
+#ifndef CONFIG_NO_EVAL
 static JSValue js_evalScript(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -788,6 +795,7 @@ static JSValue js_evalScript(JSContext *ctx, JSValueConst this_val,
     }
     return ret;
 }
+#endif
 
 static JSClassID js_std_file_class_id;
 
@@ -1488,8 +1496,10 @@ static const JSCFunctionListEntry js_std_error_props[] = {
 static const JSCFunctionListEntry js_std_funcs[] = {
     JS_CFUNC_DEF("exit", 1, js_std_exit ),
     JS_CFUNC_DEF("gc", 0, js_std_gc ),
+#ifndef CONFIG_NO_EVAL
     JS_CFUNC_DEF("evalScript", 1, js_evalScript ),
     JS_CFUNC_DEF("loadScript", 1, js_loadScript ),
+#endif
     JS_CFUNC_DEF("getenv", 1, js_std_getenv ),
     JS_CFUNC_DEF("setenv", 1, js_std_setenv ),
     JS_CFUNC_DEF("unsetenv", 1, js_std_unsetenv ),
@@ -3763,9 +3773,10 @@ void js_std_add_helpers(JSContext *ctx, int argc, char **argv)
     
     JS_SetPropertyStr(ctx, global_obj, "print",
                       JS_NewCFunction(ctx, js_print, "print", 1));
+#ifndef CONFIG_NO_EVAL
     JS_SetPropertyStr(ctx, global_obj, "__loadScript",
                       JS_NewCFunction(ctx, js_loadScript, "__loadScript", 1));
-    
+#endif
     JS_FreeValue(ctx, global_obj);
 }
 

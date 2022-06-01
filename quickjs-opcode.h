@@ -115,8 +115,10 @@ DEF(      add_brand, 1, 2, 0, none) /* this_obj home_obj -> */
 DEF(   return_async, 1, 1, 0, none)
 DEF(          throw, 1, 1, 0, none)
 DEF(    throw_error, 6, 0, 0, atom_u8)
+#ifndef CONFIG_NO_EVAL_INSTR
 DEF(           eval, 5, 1, 1, npop_u16) /* func args... -> ret_val */
 DEF(     apply_eval, 3, 2, 1, u16) /* func array -> ret_eval */
+#endif
 DEF(         regexp, 1, 2, 1, none) /* create a RegExp object from the pattern and a
                                        bytecode string */
 DEF(      get_super, 1, 1, 1, none)
